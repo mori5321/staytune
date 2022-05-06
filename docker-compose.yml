@@ -1,0 +1,38 @@
+version: '3'
+
+services:
+  db:
+    image: postgres:latest
+    restart: always
+    environment:
+      # Basic Settings
+      POSTGRES_DB: staytune-dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+      # refs: https://qiita.com/mm_sys/items/996991d19b0d6e5c0715
+      PGDATA: /var/lib/postgresql/data/pgdata
+      # Replication Settings
+      POSTGRESQL_REPLICATION_MODE: master
+      POSTGRESQL_REPLICATION_USER: repl
+      POSTGRESQL_REPLICATION_PASSWORD: password
+    command: -c 'config_file=/var/lib/postgresql/data/postgresql.conf'
+    ports:
+      - '${DATABASE_PORT:?}:5432'
+    volumes:
+      - type: volume
+        source: db
+        target: /var/lib/postgresql/data
+      - type: bind
+        source: ./config/postgresql.conf
+        target: /var/lib/postgresql/data/postgresql.conf
+      - type: bind
+        source: ./config/initdb.d
+        target: /docker-entrypoint-initdb.d
+    logging:
+      options:
+        max-size: '10k'
+        max-file: '5'
+
+volumes:
+  db:

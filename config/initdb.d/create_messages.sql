@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS messages (
+  id   UUID NOT NULL,
+  text VARCHAR(255) NOT NULL DEFAULT '',
+  created_at TIMESTAMP NOT NULL DEFAULT now()
+)
