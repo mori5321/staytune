@@ -2,12 +2,14 @@ import postgres from 'postgres';
 import fastify, { FastifyRequest } from 'fastify';
 
 import fastifyWebsocket, { SocketStream } from '@fastify/websocket';
+import fastifyCors from '@fastify/cors';
 
 const connectionString = 'postgresql://postgres:password@localhost:5001/staytune-dev?replication=database';
 const sql = postgres(connectionString, { publications: 'alltables' });
 
-const server = fastify();
+const server = fastify({ logger: true });
 server.register(fastifyWebsocket);
+server.register(fastifyCors);
 
 server.get('/ping', async (_req, _rep) => 'pong\n');
 
