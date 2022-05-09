@@ -1,4 +1,12 @@
-import { Container, Timeline, Form, SelectPicker, Button, List } from "rsuite";
+import {
+  Container,
+  Timeline,
+  Form,
+  SelectPicker,
+  Button,
+  List,
+  Modal,
+} from "rsuite";
 import React from "react";
 import ky from "ky";
 import produce from "immer";
@@ -131,8 +139,23 @@ function App() {
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [users, setUsers] = React.useState<User[]>([]);
 
+  const [isModalOpen, setModalOpen] = React.useState(false);
+  const [targetUser, setTargetUser] = React.useState<User | null>(null);
+  const openModal = (user: User) => {
+    setTargetUser(user);
+    setModalOpen(true);
+  };
+
   const userOptions = React.useMemo(() => users.map(userToOption), [users]);
   const usersMap = React.useMemo(() => toMap(users), [users]);
+
+  const updateUserField = (updatedUser: User) => {
+    const newUsers = produce(users, (draft) => {
+      const idx = draft.findIndex((user) => updatedUser.id);
+      draft.splice(idx, 1, updatedUser);
+    });
+    setUsers(newUsers);
+  };
 
   const addMessage = async (newMessage: Message) => {
     try {
@@ -265,13 +288,77 @@ function App() {
               }}
             >
               <div>{user.name}</div>
-              <div style={{ cursor: "pointer", color: "#59afff" }}>Edit</div>
+              <div
+                style={{ cursor: "pointer", color: "#59afff" }}
+                onClick={() => openModal(user)}
+              >
+                Edit
+              </div>
             </List.Item>
           ))}
         </List>
       </div>
+      {targetUser && (
+        <UserEditModal
+          open={isModalOpen}
+          user={targetUser}
+          updateUserField={updateUserField}
+          handleClose={() => setModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
+
+type UserEditModalProps = {
+  user: User;
+  open: boolean;
+  handleClose: () => void;
+  updateUserField: (user: User) => void;
+};
+const UserEditModal = ({
+  user,
+  open,
+  handleClose,
+  updateUserField,
+}: UserEditModalProps) => {
+  const [formValue, setFormValue] = React.useState(user);
+
+  const handleSubmit = async () => {
+    try {
+      await updateUser(formValue);
+      updateUserField(formValue);
+    } finally {
+      handleClose();
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={handleClose}>
+      <div style={{ fontWeight: "bold", fontSize: "16px" }}>Edit user</div>
+      <Container style={{ padding: "16px 0" }}>
+        <Form
+          style={{ display: "flex", gap: "16px", alignItems: "center" }}
+          formValue={formValue}
+        >
+          <Form.Group controlId="name">
+            <Form.ControlLabel>Name</Form.ControlLabel>
+            <Form.Control
+              name="text"
+              type="text"
+              value={formValue.name}
+              onChange={(value: string) => {
+                setFormValue({ ...formValue, name: value });
+              }}
+            />
+          </Form.Group>
+          <Form.Group>
+            <Button onClick={handleSubmit}>Submit</Button>
+          </Form.Group>
+        </Form>
+      </Container>
+    </Modal>
+  );
+};
 
 export default App;

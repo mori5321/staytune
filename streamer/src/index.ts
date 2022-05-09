@@ -55,7 +55,7 @@ type MessageModel = Message & {
 
 // GET /users
 server.get('/users', async (_req, _res) => {
-  const users = await sql<UserModel[]>`SELECT * FROM users LIMIT 30`;
+  const users = await sql<UserModel[]>`SELECT * FROM users ORDER BY created_at LIMIT 30`;
 
   return users;
 });
@@ -98,7 +98,7 @@ server.get<{
   Params: { id: string }
 }>('/rooms/:id/messages', async (req, _res) => {
   const { id } = req.params;
-  const messages = await sql<MessageModel[]>`SELECT * FROM messages WHERE room_id = ${id} LIMIT 200`;
+  const messages = await sql<MessageModel[]>`SELECT * FROM messages WHERE room_id = ${id} ORDER BY created_at LIMIT 200`;
 
   return messages;
 });
