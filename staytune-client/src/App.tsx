@@ -10,6 +10,7 @@ import {
 import React from "react";
 import ky from "ky";
 import produce from "immer";
+import useWebSocket, { ReadyState } from "react-use-websocket";
 
 // Utilities
 interface ToMap {
@@ -36,7 +37,7 @@ const fieldToCamelCase = (obj: Record<string, any>): Record<string, any> => {
 
 const toCamelCase = (str: string): string => {
   str = str.charAt(0).toLowerCase() + str.slice(1);
-  return str.replace(/[-_](.)/g, function (match, group1) {
+  return str.replace(/[-_](.)/g, function (_match, group1) {
     return group1.toUpperCase();
   });
 };
@@ -46,7 +47,7 @@ type Option = {
   value: string;
 };
 
-// Domain = Room
+// Domain - Room
 type Room = Readonly<{ id: string; title: string }>;
 
 const defaultRoom: Room = {
@@ -54,7 +55,7 @@ const defaultRoom: Room = {
   title: "Room1",
 };
 
-// Domain = Message
+// Domain - Message
 type Message = Readonly<{
   id: string;
   text: string;
@@ -69,7 +70,10 @@ type User = Readonly<{
   name: string;
 }>;
 
-const userToOption = (user: User) => ({ label: user.name, value: user.id });
+const userToOption = (user: User): Option => ({
+  label: user.name,
+  value: user.id,
+});
 
 // Initial Data
 const initialFormInput: MessageFormInput = {
@@ -109,13 +113,9 @@ const listMessages = async (): Promise<Message[]> => {
   return messages;
 };
 
-const deleteMessage = async (
-  id: string,
-  cb: (deletedId: string) => void
-): Promise<void> => {
+const deleteMessage = async (id: string): Promise<void> => {
   try {
     await apiClient.delete(`rooms/${defaultRoom.id}/messages/${id}`);
-    cb(id);
   } catch {
     alert("fail");
   }
@@ -138,29 +138,23 @@ function App() {
     React.useState<MessageFormInput>(initialFormInput);
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [users, setUsers] = React.useState<User[]>([]);
-
-  const [isModalOpen, setModalOpen] = React.useState(false);
   const [targetUser, setTargetUser] = React.useState<User | null>(null);
+
   const openModal = (user: User) => {
     setTargetUser(user);
-    setModalOpen(true);
   };
+
+  const isModalOpen = React.useMemo<boolean>(() => {
+    return !!targetUser;
+  }, [targetUser]);
 
   const userOptions = React.useMemo(() => users.map(userToOption), [users]);
   const usersMap = React.useMemo(() => toMap(users), [users]);
 
-  const updateUserField = (updatedUser: User) => {
-    const newUsers = produce(users, (draft) => {
-      const idx = draft.findIndex((user) => updatedUser.id);
-      draft.splice(idx, 1, updatedUser);
-    });
-    setUsers(newUsers);
-  };
-
   const addMessage = async (newMessage: Message) => {
     try {
       await createMessage(newMessage);
-      setMessages((value) => [...value, newMessage]);
+      // setMessages((value) => [...value, newMessage]);
     } catch {
       alert("Failed");
     }
@@ -184,6 +178,49 @@ function App() {
       setMessages(messagesResponse);
     })();
   }, [setUsers, setMessages]);
+
+  // Websocket Subscription
+  const messageWS = useWebSocket("ws://localhost:8080/ws/messages");
+  React.useEffect(() => {
+    if (messageWS.lastMessage !== null) {
+      const wsMessage = JSON.parse(messageWS.lastMessage.data);
+      if (wsMessage.command === "insert") {
+        const newMessage = fieldToCamelCase(wsMessage.data) as Message;
+        setMessages((value) => [...value, newMessage]);
+      }
+
+      if (wsMessage.command === "delete") {
+        setMessages((value) => {
+          const newMessages = produce(value, (draft) => {
+            const idx = draft.findIndex(
+              (message) => message.id === wsMessage.data.id
+            );
+            draft.splice(idx, 1);
+          });
+          return newMessages;
+        });
+      }
+    }
+  }, [messageWS.lastMessage, setMessages]);
+
+  const userWS = useWebSocket("ws://localhost:8080/ws/users");
+  React.useEffect(() => {
+    if (userWS.lastMessage !== null) {
+      const wsUser = JSON.parse(userWS.lastMessage.data);
+      console.log("WsUser", wsUser);
+      if (wsUser.command === "update") {
+        setUsers((value) => {
+          const newUsers = produce(value, (draft) => {
+            const idx = draft.findIndex((user) => wsUser.data.id === user.id);
+            const newUser = fieldToCamelCase(wsUser.data) as User;
+            console.log("newUser", newUser);
+            draft.splice(idx, 1, newUser);
+          });
+          return newUsers;
+        });
+      }
+    }
+  }, [userWS.lastMessage, setUsers]);
 
   return (
     <div style={{ padding: "32px", display: "flex" }}>
@@ -242,17 +279,7 @@ function App() {
                   </span>
                 </div>
                 <div
-                  onClick={() =>
-                    deleteMessage(msg.id, (deletedId: string) => {
-                      const newMessages = produce(messages, (draft) => {
-                        const idx = draft.findIndex(
-                          (message) => message.id === deletedId
-                        );
-                        draft.splice(idx, 1);
-                      });
-                      setMessages(newMessages);
-                    })
-                  }
+                  onClick={() => deleteMessage(msg.id)}
                   style={{
                     cursor: "pointer",
                     color: "#59afff",
@@ -302,8 +329,7 @@ function App() {
         <UserEditModal
           open={isModalOpen}
           user={targetUser}
-          updateUserField={updateUserField}
-          handleClose={() => setModalOpen(false)}
+          handleClose={() => setTargetUser(null)}
         />
       )}
     </div>
@@ -314,20 +340,13 @@ type UserEditModalProps = {
   user: User;
   open: boolean;
   handleClose: () => void;
-  updateUserField: (user: User) => void;
 };
-const UserEditModal = ({
-  user,
-  open,
-  handleClose,
-  updateUserField,
-}: UserEditModalProps) => {
+const UserEditModal = ({ user, open, handleClose }: UserEditModalProps) => {
   const [formValue, setFormValue] = React.useState(user);
 
   const handleSubmit = async () => {
     try {
       await updateUser(formValue);
-      updateUserField(formValue);
     } finally {
       handleClose();
     }

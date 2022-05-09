@@ -8,26 +8,10 @@ const connectionString = 'postgresql://postgres:password@localhost:5001/staytune
 const sql = postgres(connectionString, { publications: 'alltables' });
 
 const server = fastify({ logger: true });
-server.register(fastifyWebsocket);
 server.register(fastifyCors);
+server.register(fastifyWebsocket);
 
 server.get('/ping', async (_req, _rep) => 'pong\n');
-
-server.get('/ws/messages', { websocket: true }, async (connection: SocketStream, _req: FastifyRequest) => {
-  await sql.subscribe('*:messages', (row) => {
-    connection.socket.send(JSON.stringify(row));
-  });
-
-  /* eslint-disable no-console */
-  connection.socket.on('connection', () => {
-    console.log('Connected');
-    connection.socket.send('connected');
-  });
-
-  connection.socket.on('message', (message: string) => {
-    connection.socket.send(`I got: ${message}`);
-  });
-});
 
 type User = Readonly<{
   id: string,
@@ -42,6 +26,7 @@ type Room = Readonly<{
 type Message = Readonly<{
   id: string,
   text: string,
+  user_id: string,
 }>;
 
 type UserModel = User;
@@ -52,6 +37,67 @@ type MessageModel = Message & {
   room_id: string,
   user_id: string,
 }
+
+type WsMessageInsert = {
+  command: 'insert',
+  data: Message,
+}
+
+type WsMessageDelete = {
+  command: 'delete',
+  data: { id: string }
+}
+
+type WsMessage = WsMessageInsert | WsMessageDelete
+
+type WsUserUpdate = {
+  command: 'update',
+  data: User
+}
+
+type WsUser = WsUserUpdate
+
+server.get('/ws/messages', { websocket: true }, async (connection: SocketStream, _req: FastifyRequest) => {
+  await sql.subscribe('*:messages', (row, info) => {
+    /* eslint-disable no-console */
+    const data: WsMessage | null = (() => {
+      if (info.command === 'insert') {
+        return {
+          command: 'insert',
+          data: row as Message,
+        };
+      }
+
+      if (info.command === 'delete') {
+        return {
+          command: 'delete',
+          data: { id: row && row['id'] } as { id: string },
+        };
+      }
+
+      return null;
+    })();
+
+    if (data) connection.socket.send(JSON.stringify(data));
+  });
+});
+
+server.get('/ws/users', { websocket: true }, async (connection: SocketStream, _req: FastifyRequest) => {
+  await sql.subscribe('*:users', (row, info) => {
+    const data: WsUser | null = (() => {
+      if (info.command === 'update') {
+        return {
+          command: 'update',
+          data: row as User,
+        };
+      }
+
+      return null;
+    })();
+
+    if (data) connection.socket.send(JSON.stringify(data));
+  });
+});
 
 // GET /users
 server.get('/users', async (_req, _res) => {
