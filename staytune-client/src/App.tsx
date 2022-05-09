@@ -1,6 +1,7 @@
 import { Container, Timeline, Form, SelectPicker, Button, List } from "rsuite";
 import React from "react";
 import ky from "ky";
+import produce from "immer";
 
 // Utilities
 interface ToMap {
@@ -47,11 +48,12 @@ const defaultRoom: Room = {
 
 // Domain = Message
 type Message = Readonly<{
+  id: string;
   text: string;
   userId: string;
 }>;
 
-type MessageFormInput = Pick<Message, "text" | "userId">;
+type MessageFormInput = Pick<Message, "id" | "text" | "userId">;
 
 // Domain - User
 type User = Readonly<{
@@ -63,6 +65,7 @@ const userToOption = (user: User) => ({ label: user.name, value: user.id });
 
 // Initial Data
 const initialFormInput: MessageFormInput = {
+  id: "",
   text: "",
   userId: "",
 };
@@ -79,6 +82,18 @@ const listUsers = async (): Promise<User[]> => {
   return users;
 };
 
+const updateUser = async (user: User): Promise<void> => {
+  try {
+    await apiClient.patch(`users/${user.id}`, {
+      json: {
+        name: user.name,
+      },
+    });
+  } catch {
+    alert("fail");
+  }
+};
+
 const listMessages = async (): Promise<Message[]> => {
   const response = await apiClient.get(`rooms/${defaultRoom.id}/messages`);
   const data = await response.json();
@@ -86,12 +101,27 @@ const listMessages = async (): Promise<Message[]> => {
   return messages;
 };
 
+const deleteMessage = async (
+  id: string,
+  cb: (deletedId: string) => void
+): Promise<void> => {
+  try {
+    await apiClient.delete(`rooms/${defaultRoom.id}/messages/${id}`);
+    cb(id);
+  } catch {
+    alert("fail");
+  }
+};
+
 const createMessage = async (input: MessageFormInput): Promise<void> => {
   const body = input;
-  await apiClient.post(`rooms/${defaultRoom.id}/messages`, {
-    json: body,
-  });
-  return;
+  try {
+    await apiClient.post(`rooms/${defaultRoom.id}/messages`, {
+      json: body,
+    });
+  } catch {
+    alert("fail");
+  }
 };
 
 // UI
@@ -113,7 +143,7 @@ function App() {
     }
   };
 
-  const resetFormValue = () => setFormValue({ text: "", userId: "" });
+  const resetFormValue = () => setFormValue(initialFormInput);
 
   const handleSubmit = async () => {
     await addMessage(formValue);
@@ -172,19 +202,43 @@ function App() {
             </Form.Group>
           </Form>
         </Container>
-        <Timeline>
+        <Timeline style={{ maxWidth: "480px" }}>
           {messages.map((msg, i) => (
             <Timeline.Item key={i}>
-              <span>{msg.text}</span>
-              <span
-                style={{
-                  fontSize: "12px",
-                  marginLeft: "4px",
-                  color: "#999999",
-                }}
-              >
-                by {usersMap[msg.userId]?.name ?? "NoBody"}
-              </span>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <div>
+                  <span style={{ fontSize: "16px" }}>{msg.text}</span>
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      marginLeft: "4px",
+                      color: "#999999",
+                    }}
+                  >
+                    by {usersMap[msg.userId]?.name ?? "NoBody"}
+                  </span>
+                </div>
+                <div
+                  onClick={() =>
+                    deleteMessage(msg.id, (deletedId: string) => {
+                      const newMessages = produce(messages, (draft) => {
+                        const idx = draft.findIndex(
+                          (message) => message.id === deletedId
+                        );
+                        draft.splice(idx, 1);
+                      });
+                      setMessages(newMessages);
+                    })
+                  }
+                  style={{
+                    cursor: "pointer",
+                    color: "#59afff",
+                    fontSize: "12px",
+                  }}
+                >
+                  DELETE
+                </div>
+              </div>
             </Timeline.Item>
           ))}
         </Timeline>
@@ -201,7 +255,18 @@ function App() {
         </div>
         <List>
           {users.map((user) => (
-            <List.Item key={user.id}>{user.name}</List.Item>
+            <List.Item
+              key={user.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                paddingLeft: "16px",
+                paddingRight: "16px",
+              }}
+            >
+              <div>{user.name}</div>
+              <div style={{ cursor: "pointer", color: "#59afff" }}>Edit</div>
+            </List.Item>
           ))}
         </List>
       </div>

@@ -19,11 +19,11 @@
   - [x] GET rooms/:id
   - [x] GET rooms/:id/messages
   - [x] POST rooms/:id/messages
-  - PATCH rooms/:id/messages
+  - [x] DELETE rooms/:roomId/messages/:id
   - [x] GET users
-  - GET users/:id
-  - PUT users/:id
-  - POST users
+  - [ ] GET users/:id
+  - [ ] PATCH users/:id
+  - [ ] POST users
 
 
 # Phase2

@@ -60,6 +60,18 @@ server.get('/users', async (_req, _res) => {
   return users;
 });
 
+// PATCH /users
+server.patch<{
+  Params: {id: string},
+  Body: {name: string}
+}>('/users/:id', async (req, _res) => {
+  await sql`
+    UPDATE users SET name = ${req.body.name} WHERE id = ${req.params.id}
+  `;
+
+  return null;
+});
+
 // GET /rooms
 server.get('/rooms', async (_req, _res) => {
   const rooms = await sql<RoomModel[]>`SELECT * FROM rooms LIMIT 30`;
@@ -91,7 +103,6 @@ server.get<{
   return messages;
 });
 
-// POST /rooms/:id/messages
 server.post<{
   Params: { id: string },
   Body: Pick<Message, 'text'> & { userId: string }
@@ -99,6 +110,14 @@ server.post<{
   await sql`
     INSERT INTO messages (id, text, user_id, room_id)
     VALUES (gen_random_uuid(), ${req.body.text}, ${req.body.userId}, ${req.params.id})`;
+
+  return null;
+});
+
+server.delete<{
+  Params: { roomId: string, id: string },
+}>('/rooms/:roomId/messages/:id', async (req, _res) => {
+  await sql`DELETE FROM messages WHERE (id = ${req.params.id} AND room_id = ${req.params.roomId})`;
 
   return null;
 });
