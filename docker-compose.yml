@@ -24,10 +24,10 @@ services:
         source: db
         target: /var/lib/postgresql/data
       - type: bind
-        source: ./config/postgresql.conf
+        source: ./docker/postgresql.conf
         target: /var/lib/postgresql/data/postgresql.conf
       - type: bind
-        source: ./config/initdb.d
+        source: ./docker/initdb.d
         target: /docker-entrypoint-initdb.d
     logging:
       options:
