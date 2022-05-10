@@ -255,6 +255,7 @@ function App() {
                 onChange={(value: string) => {
                   setFormValue({ ...formValue, text: value });
                 }}
+                style={{ maxWidth: "200px" }}
               />
             </Form.Group>
             <Form.Group>
@@ -262,7 +263,7 @@ function App() {
             </Form.Group>
           </Form>
         </Container>
-        <Timeline style={{ maxWidth: "480px" }}>
+        <Timeline style={{ maxWidth: "380px" }}>
           {messages.map((msg, i) => (
             <Timeline.Item key={i}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
